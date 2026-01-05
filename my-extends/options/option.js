@@ -35,21 +35,49 @@ function getFolderPath(bookmark, bookmarkTree) {
   return path ? path.join(' / ') : '未知文件夹';
 }
 
+// 获取书签的tag列表
+async function getBookmarkTags(bookmarkId) {
+  try {
+    const result = await chrome.storage.local.get('bookmarkTags');
+    const bookmarkTags = result.bookmarkTags || {};
+    return bookmarkTags[bookmarkId] || [];
+  } catch (error) {
+    console.error('获取书签tag失败:', error);
+    return [];
+  }
+}
+
+// 获取所有书签的tag（批量）
+async function getAllBookmarkTags() {
+  try {
+    const result = await chrome.storage.local.get('bookmarkTags');
+    return result.bookmarkTags || {};
+  } catch (error) {
+    console.error('获取所有书签tag失败:', error);
+    return {};
+  }
+}
+
 // 递归提取所有书签
-function extractBookmarks(nodes, bookmarkTree, bookmarks = []) {
+async function extractBookmarks(nodes, bookmarkTree, bookmarks = []) {
+  // 先获取所有tag
+  const allTags = await getAllBookmarkTags();
+  
   for (const node of nodes) {
     if (node.url) {
       // 这是一个书签
+      const bookmarkTags = allTags[node.id] || [];
       bookmarks.push({
         id: node.id,
         title: node.title || '无标题',
         url: node.url,
-        folder: getFolderPath(node, bookmarkTree)
+        folder: getFolderPath(node, bookmarkTree),
+        tags: bookmarkTags
       });
     }
     if (node.children) {
       // 这是一个文件夹，递归处理
-      extractBookmarks(node.children, bookmarkTree, bookmarks);
+      await extractBookmarks(node.children, bookmarkTree, bookmarks);
     }
   }
   return bookmarks;
@@ -65,8 +93,8 @@ async function loadBookmarks() {
     // 获取书签树
     const bookmarkTree = await chrome.bookmarks.getTree();
     
-    // 提取所有书签
-    allBookmarks = extractBookmarks(bookmarkTree, bookmarkTree);
+    // 提取所有书签（异步）
+    allBookmarks = await extractBookmarks(bookmarkTree, bookmarkTree);
     
     // 更新统计
     totalCountEl.textContent = allBookmarks.length;
@@ -120,18 +148,31 @@ function renderBookmarks() {
     const bookmarkUrl = bookmark.url;
     const bookmarkTitle = escapeHtml(bookmark.title);
     const escapedUrl = escapeHtml(bookmarkUrl);
+    const tags = bookmark.tags || [];
+
+    // 渲染tag HTML
+    let tagsHtml = '';
+    if (tags.length > 0) {
+      tagsHtml = `
+        <div class="bookmark-tags">
+          ${tags.map(tag => `<span class="bookmark-tag">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+      `;
+    }
 
     return `
       <div class="bookmark-item" data-bookmark-id="${bookmarkId}" data-bookmark-url="${escapedUrl}" data-bookmark-title="${bookmarkTitle}">
         <button class="bookmark-menu-btn" data-menu-id="${bookmarkId}">⋮</button>
         <div class="bookmark-menu" id="menu-${bookmarkId}">
           <button class="bookmark-menu-item edit" data-bookmark-id="${bookmarkId}">编辑</button>
+          <button class="bookmark-menu-item edit-tags" data-bookmark-id="${bookmarkId}">编辑标签</button>
           <button class="bookmark-menu-item copy-link" data-url="${escapedUrl}">复制链接</button>
           <button class="bookmark-menu-item delete" data-bookmark-id="${bookmarkId}" data-bookmark-title="${bookmarkTitle}">删除</button>
         </div>
         <div class="bookmark-title" id="title-${bookmarkId}">${bookmarkTitle}</div>
         <input type="text" class="bookmark-title-edit" id="title-edit-${bookmarkId}" value="${bookmarkTitle}" style="display: none;">
         <div class="bookmark-url" title="${escapedUrl}">${escapeHtml(domain)}</div>
+        ${tagsHtml}
         <div class="bookmark-folder">${escapeHtml(bookmark.folder)}</div>
       </div>
     `;
@@ -297,6 +338,145 @@ function saveBookmarkTitle(bookmarkId, newTitle) {
     });
 }
 
+// 解析tag输入文本（格式：#tag1 #tag2 #tag3）
+function parseTags(inputText) {
+  if (!inputText || !inputText.trim()) {
+    return [];
+  }
+  
+  // 按空格分割
+  const parts = inputText.trim().split(/\s+/);
+  const tags = [];
+  
+  for (const part of parts) {
+    // 移除#号（如果有）
+    let tag = part.trim();
+    if (tag.startsWith('#')) {
+      tag = tag.substring(1);
+    }
+    
+    // 如果tag不为空且不包含空格，则添加
+    if (tag && !tag.includes(' ')) {
+      tags.push(tag);
+    }
+  }
+  
+  // 去重
+  return [...new Set(tags)];
+}
+
+// 格式化tag为显示文本（#tag1 #tag2 #tag3）
+function formatTags(tags) {
+  return tags.map(tag => `#${tag}`).join(' ');
+}
+
+// 开始编辑标签
+async function startEditTags(bookmarkId) {
+  // 获取当前标签
+  const currentTags = await getBookmarkTags(bookmarkId);
+  const currentTagsText = formatTags(currentTags);
+  
+  // 创建编辑对话框
+  const dialog = document.createElement('div');
+  dialog.className = 'tags-edit-dialog';
+  dialog.innerHTML = `
+    <div class="tags-edit-overlay"></div>
+    <div class="tags-edit-content">
+      <div class="tags-edit-header">
+        <h3>编辑标签</h3>
+        <button class="tags-edit-close">×</button>
+      </div>
+      <div class="tags-edit-body">
+        <div class="tags-edit-hint">输入标签，以 # 开头，空格分隔（例如：#工作 #重要）</div>
+        <input type="text" class="tags-edit-input" id="tags-edit-input-${bookmarkId}" 
+               value="${escapeHtml(currentTagsText)}" 
+               placeholder="#标签1 #标签2">
+        <div class="tags-edit-preview" id="tags-edit-preview-${bookmarkId}"></div>
+      </div>
+      <div class="tags-edit-actions">
+        <button class="tags-edit-btn cancel">取消</button>
+        <button class="tags-edit-btn save">保存</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(dialog);
+  
+  const input = dialog.querySelector('.tags-edit-input');
+  const preview = dialog.querySelector(`#tags-edit-preview-${bookmarkId}`);
+  const closeBtn = dialog.querySelector('.tags-edit-close');
+  const cancelBtn = dialog.querySelector('.tags-edit-btn.cancel');
+  const saveBtn = dialog.querySelector('.tags-edit-btn.save');
+  const overlay = dialog.querySelector('.tags-edit-overlay');
+  
+  // 更新预览
+  function updatePreview() {
+    const tags = parseTags(input.value);
+    if (tags.length > 0) {
+      preview.innerHTML = `
+        <div class="tags-preview-label">预览：</div>
+        <div class="tags-preview-tags">
+          ${tags.map(tag => `<span class="bookmark-tag">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+      `;
+    } else {
+      preview.innerHTML = '<div class="tags-preview-empty">暂无标签</div>';
+    }
+  }
+  
+  // 初始预览
+  updatePreview();
+  
+  // 输入时更新预览
+  input.addEventListener('input', updatePreview);
+  
+  // 关闭对话框
+  function closeDialog() {
+    document.body.removeChild(dialog);
+  }
+  
+  closeBtn.addEventListener('click', closeDialog);
+  cancelBtn.addEventListener('click', closeDialog);
+  overlay.addEventListener('click', closeDialog);
+  
+  // 保存标签
+  saveBtn.addEventListener('click', async () => {
+    const tags = parseTags(input.value);
+    await saveBookmarkTags(bookmarkId, tags);
+    closeDialog();
+    showNotification('标签已保存');
+    loadBookmarks(); // 重新加载以更新显示
+  });
+  
+  // ESC键关闭
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeDialog();
+    } else if (e.key === 'Enter' && e.ctrlKey) {
+      saveBtn.click();
+    }
+  });
+  
+  // 聚焦输入框
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 100);
+}
+
+// 保存书签标签
+async function saveBookmarkTags(bookmarkId, tags) {
+  try {
+    const result = await chrome.storage.local.get('bookmarkTags');
+    const bookmarkTags = result.bookmarkTags || {};
+    bookmarkTags[bookmarkId] = tags;
+    await chrome.storage.local.set({ bookmarkTags: bookmarkTags });
+  } catch (error) {
+    console.error('保存标签失败:', error);
+    throw error;
+  }
+}
+
 // 删除书签
 function deleteBookmark(id, title) {
   if (confirm(`确定要删除书签 "${title}" 吗？`)) {
@@ -427,6 +607,18 @@ function initEventDelegation() {
       const bookmarkId = e.target.getAttribute('data-bookmark-id');
       if (bookmarkId) {
         startEditBookmark(bookmarkId);
+      }
+      const menuId = e.target.closest('.bookmark-menu').id.replace('menu-', '');
+      closeMenu(menuId);
+      return;
+    }
+
+    // 编辑标签按钮
+    if (e.target.classList.contains('edit-tags')) {
+      e.stopPropagation();
+      const bookmarkId = e.target.getAttribute('data-bookmark-id');
+      if (bookmarkId) {
+        startEditTags(bookmarkId);
       }
       const menuId = e.target.closest('.bookmark-menu').id.replace('menu-', '');
       closeMenu(menuId);
