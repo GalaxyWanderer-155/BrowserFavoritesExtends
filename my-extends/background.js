@@ -15,9 +15,36 @@ async function notifyBookmarkChange(type, data) {
 }
 
 // 监听书签创建事件
-chrome.bookmarks.onCreated.addListener((id, bookmark) => {
+chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
   console.log('书签已创建:', bookmark);
   notifyBookmarkChange('BOOKMARK_CREATED', { bookmark: bookmark });
+  
+  // 保存书签信息并在扩展图标上显示提示
+  if (bookmark.url) {
+    try {
+      // 获取当前活动标签页的信息
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      // 存储书签信息供 popup 使用
+      await chrome.storage.local.set({
+        lastBookmarked: {
+          id: id,
+          title: bookmark.title,
+          url: bookmark.url,
+          dateAdded: bookmark.dateAdded,
+          tabTitle: tab?.title || bookmark.title,
+          tabUrl: tab?.url || bookmark.url,
+          hasNewBookmark: true
+        }
+      });
+
+      // 在扩展图标上显示提示徽章
+      chrome.action.setBadgeText({ text: '新' });
+      chrome.action.setBadgeBackgroundColor({ color: '#333' });
+    } catch (error) {
+      console.error('处理收藏事件失败:', error);
+    }
+  }
 });
 
 // 监听书签删除事件

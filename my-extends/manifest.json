@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "我的第一个插件",
+  "name": "书签收藏扩展插件",
   "version": "0.0.1",
-  "description": "我的第一个插件的描述",
+  "description": "书签收藏功能扩展",
   "author": "fengfeng",
   "permissions": [
-    "bookmarks"
+    "bookmarks",
+    "tabs",
+    "storage"
   ],
   "background": {
     "service_worker": "background.js"
@@ -18,7 +20,7 @@
       "64": "icon.png",
       "128": "icon.png"
     },
-    "default_popup": "popup.html"
+    "default_popup": "popups/popup.html"
   },
   "icons": {
     "16": "icon.png",
