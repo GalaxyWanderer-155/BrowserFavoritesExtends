@@ -44,12 +44,35 @@ body {
     line-height: 1.4;
 }
 
+.bookmark-url-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
 .bookmark-url {
     font-size: 13px;
     color: #666;
     word-break: break-all;
-    margin-bottom: 12px;
     line-height: 1.4;
+    flex: 1;
+}
+
+.copy-url-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #666;
+    padding: 4px;
+    line-height: 1;
+    transition: color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.copy-url-btn:hover {
+    color: #333;
 }
 
 .bookmark-actions {
@@ -114,6 +137,205 @@ body {
     padding: 20px;
     color: #999;
     font-size: 14px;
+}
+
+/* 标签相关样式 */
+.bookmark-tags-section {
+    margin-top: 12px;
+    margin-bottom: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.bookmark-tags-label {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 8px;
+}
+
+.bookmark-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.bookmark-tag {
+    background: #f0f0f0;
+    border: 1px solid #e0e0e0;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: #666;
+    border-radius: 3px;
+}
+
+.bookmark-tags-empty {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 8px;
+}
+
+.action-btn-link {
+    background: none;
+    border: none;
+    color: #333;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    transition: color 0.15s ease;
+}
+
+.action-btn-link:hover {
+    color: #000;
+}
+
+/* 标签编辑对话框 */
+.tags-edit-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tags-edit-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.tags-edit-content {
+    position: relative;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    width: 90%;
+    max-width: 400px;
+    z-index: 10001;
+}
+
+.tags-edit-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tags-edit-header h3 {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+    margin: 0;
+}
+
+.tags-edit-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    transition: color 0.15s ease;
+}
+
+.tags-edit-close:hover {
+    color: #333;
+}
+
+.tags-edit-body {
+    padding: 20px;
+}
+
+.tags-edit-hint {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 12px;
+}
+
+.tags-edit-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    font-family: inherit;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+
+.tags-edit-input:focus {
+    outline: none;
+    border-color: #333;
+}
+
+.tags-edit-preview {
+    min-height: 40px;
+    padding: 12px;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.tags-preview-label {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 8px;
+}
+
+.tags-preview-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tags-preview-empty {
+    font-size: 12px;
+    color: #999;
+    text-align: center;
+    padding: 8px 0;
+}
+
+.tags-edit-actions {
+    padding: 12px 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.tags-edit-btn {
+    padding: 8px 16px;
+    border: 1px solid #e0e0e0;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    color: #333;
+    transition: all 0.15s ease;
+}
+
+.tags-edit-btn:hover {
+    border-color: #333;
+    background: #f5f5f5;
+}
+
+.tags-edit-btn.save {
+    background: #333;
+    color: #fff;
+    border-color: #333;
+}
+
+.tags-edit-btn.save:hover {
+    background: #000;
 }
 
 @keyframes slideIn {

@@ -45,13 +45,25 @@ async function loadBookmarkInfo() {
       minute: '2-digit'
     });
 
+    // 获取当前标签
+    const currentTags = await getBookmarkTags(bookmark.id);
+    const tagsHtml = currentTags.length > 0 
+      ? `<div class="bookmark-tags">
+          ${currentTags.map(tag => `<span class="bookmark-tag">${escapeHtml(tag)}</span>`).join('')}
+         </div>`
+      : '';
+
     bookmarkContent.innerHTML = `
       <div class="bookmark-title">${escapeHtml(bookmark.title || '无标题')}</div>
-      <div class="bookmark-url" title="${escapeHtml(bookmark.url)}">${escapeHtml(domain)}</div>
+      <div class="bookmark-url-container">
+        <div class="bookmark-url" title="${escapeHtml(bookmark.url)}">${escapeHtml(domain)}</div>
+        <button class="copy-url-btn" id="copyUrlBtn" title="复制网址">📋</button>
+      </div>
       
-      <div class="bookmark-actions">
-        <button class="action-btn primary" id="openBtn">打开网站</button>
-        <button class="action-btn" id="copyBtn">复制链接</button>
+      <div class="bookmark-tags-section">
+        <div class="bookmark-tags-label">标签：</div>
+        ${tagsHtml || '<div class="bookmark-tags-empty">暂无标签</div>'}
+        <button class="action-btn-link" id="editTagsBtn">编辑标签</button>
       </div>
       
       <div class="bookmark-meta">
@@ -59,19 +71,10 @@ async function loadBookmarkInfo() {
       </div>
     `;
 
-    // 添加按钮事件
-    const openBtn = document.getElementById('openBtn');
-    const copyBtn = document.getElementById('copyBtn');
-
-    if (openBtn) {
-      openBtn.addEventListener('click', () => {
-        chrome.tabs.create({ url: bookmark.url });
-        window.close();
-      });
-    }
-
-    if (copyBtn) {
-      copyBtn.addEventListener('click', async () => {
+    // 复制网址按钮
+    const copyUrlBtn = document.getElementById('copyUrlBtn');
+    if (copyUrlBtn) {
+      copyUrlBtn.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(bookmark.url);
           showNotification('链接已复制');
@@ -85,6 +88,14 @@ async function loadBookmarkInfo() {
           document.body.removeChild(textArea);
           showNotification('链接已复制');
         }
+      });
+    }
+
+    // 编辑标签按钮
+    const editTagsBtn = document.getElementById('editTagsBtn');
+    if (editTagsBtn) {
+      editTagsBtn.addEventListener('click', () => {
+        startEditTags(bookmark.id);
       });
     }
 
@@ -134,6 +145,148 @@ function showNotification(message) {
   }, 2000);
 }
 
+
+// 获取书签标签
+async function getBookmarkTags(bookmarkId) {
+  try {
+    const result = await chrome.storage.local.get('bookmarkTags');
+    const bookmarkTags = result.bookmarkTags || {};
+    return bookmarkTags[bookmarkId] || [];
+  } catch (error) {
+    console.error('获取书签标签失败:', error);
+    return [];
+  }
+}
+
+// 保存书签标签
+async function saveBookmarkTags(bookmarkId, tags) {
+  try {
+    const result = await chrome.storage.local.get('bookmarkTags');
+    const bookmarkTags = result.bookmarkTags || {};
+    if (tags.length > 0) {
+      bookmarkTags[bookmarkId] = tags;
+    } else {
+      delete bookmarkTags[bookmarkId]; // 如果没有标签，则删除该书签的标签记录
+    }
+    await chrome.storage.local.set({ bookmarkTags: bookmarkTags });
+  } catch (error) {
+    console.error('保存标签失败:', error);
+    throw error;
+  }
+}
+
+// 解析标签输入文本（格式：#tag1 #tag2 #tag3）
+function parseTags(inputText) {
+  if (!inputText || !inputText.trim()) {
+    return [];
+  }
+  
+  // 按空格分割
+  const parts = inputText.trim().split(/\s+/);
+  const tags = [];
+  
+  for (const part of parts) {
+    // 移除#号（如果有）
+    let tag = part.trim();
+    if (tag.startsWith('#')) {
+      tag = tag.substring(1);
+    }
+    
+    // 如果tag不为空且不包含空格，则添加
+    if (tag && !tag.includes(' ')) {
+      tags.push(tag);
+    }
+  }
+  
+  // 去重
+  return [...new Set(tags)];
+}
+
+// 格式化标签为显示文本（#tag1 #tag2 #tag3）
+function formatTags(tags) {
+  return tags.map(tag => `#${tag}`).join(' ');
+}
+
+// 开始编辑标签
+async function startEditTags(bookmarkId) {
+  const dialog = document.getElementById('tagsEditDialog');
+  const input = document.getElementById('tagsEditInput');
+  const preview = document.getElementById('tagsEditPreview');
+  const closeBtn = dialog.querySelector('.tags-edit-close');
+  const cancelBtn = dialog.querySelector('.tags-edit-btn.cancel');
+  const saveBtn = dialog.querySelector('.tags-edit-btn.save');
+  const overlay = dialog.querySelector('.tags-edit-overlay');
+
+  if (!dialog || !input || !preview) return;
+
+  // 获取当前标签
+  const currentTags = await getBookmarkTags(bookmarkId);
+  const currentTagsText = formatTags(currentTags);
+  input.value = currentTagsText;
+
+  // 更新预览
+  function updatePreview() {
+    const tags = parseTags(input.value);
+    if (tags.length > 0) {
+      preview.innerHTML = `
+        <div class="tags-preview-label">预览：</div>
+        <div class="tags-preview-tags">
+          ${tags.map(tag => `<span class="bookmark-tag">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+      `;
+    } else {
+      preview.innerHTML = '<div class="tags-preview-empty">暂无标签</div>';
+    }
+  }
+
+  // 初始预览
+  updatePreview();
+
+  // 输入时更新预览
+  input.oninput = updatePreview;
+
+  // 显示对话框
+  dialog.style.display = 'flex';
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 100);
+
+  // 关闭对话框
+  function closeDialog() {
+    dialog.style.display = 'none';
+    input.oninput = null;
+  }
+
+  closeBtn.onclick = closeDialog;
+  cancelBtn.onclick = closeDialog;
+  overlay.onclick = closeDialog;
+
+  // 保存标签
+  saveBtn.onclick = async () => {
+    const tags = parseTags(input.value);
+    try {
+      await saveBookmarkTags(bookmarkId, tags);
+      closeDialog();
+      showNotification('标签已保存');
+      loadBookmarkInfo(); // 重新加载以更新显示
+    } catch (error) {
+      console.error('保存标签失败:', error);
+      showNotification('保存失败');
+    }
+  };
+
+  // ESC键关闭，Ctrl+Enter保存
+  input.onkeydown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeDialog();
+    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      saveBtn.click();
+    }
+  };
+}
 
 // 页面加载时加载书签信息
 document.addEventListener('DOMContentLoaded', () => {

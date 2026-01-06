@@ -10,7 +10,7 @@
     <div class="sidebar">
         <div class="sidebar-item active" data-page="all-bookmarks">所有书签</div>
         <div class="sidebar-item" data-page="page-1">收藏夹</div>
-        <div class="sidebar-item" data-page="page-2">待添加</div>
+        <div class="sidebar-item" data-page="page-2">标签检索</div>
     </div>
 
     <div class="main-content">
@@ -87,12 +87,18 @@
                 </div>
             </div>
 
-            <!-- 待添加页面 2 -->
+            <!-- 标签检索页面 -->
             <div id="page-2" class="page-view">
-                <div class="empty-page">
-                    <div class="empty-page-content">
-                        <div class="empty-page-icon">—</div>
-                        <div class="empty-page-text">待添加</div>
+                <div class="header">
+                    <h1>标签检索</h1>
+                    <p>浏览和管理所有标签</p>
+                </div>
+                <div class="tags-search-container">
+                    <div id="tagsList" class="tags-list">
+                        <div class="loading">
+                            <div class="loading-spinner"></div>
+                            <div>正在加载标签...</div>
+                        </div>
                     </div>
                 </div>
             </div>

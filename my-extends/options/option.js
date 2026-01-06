@@ -1067,9 +1067,102 @@ function initSidebar() {
           clearBookmarkTreeCache();
           renderFoldersTree();
         }
+        
+        // 如果切换到标签检索页面，加载标签列表
+        if (targetPage === 'page-2') {
+          renderTagsList();
+        }
       }
     });
   });
+}
+
+// 获取所有标签及其数量
+async function getAllTagsWithCount() {
+  try {
+    const result = await chrome.storage.local.get('bookmarkTags');
+    const bookmarkTags = result.bookmarkTags || {};
+    
+    // 统计每个标签的数量
+    const tagCounts = {};
+    for (const bookmarkId in bookmarkTags) {
+      const tags = bookmarkTags[bookmarkId];
+      for (const tag of tags) {
+        if (tagCounts[tag]) {
+          tagCounts[tag]++;
+        } else {
+          tagCounts[tag] = 1;
+        }
+      }
+    }
+    
+    // 转换为数组并排序（按使用次数降序）
+    const tagsArray = Object.keys(tagCounts).map(tag => ({
+      name: tag,
+      count: tagCounts[tag]
+    })).sort((a, b) => b.count - a.count);
+    
+    return tagsArray;
+  } catch (error) {
+    console.error('获取标签列表失败:', error);
+    return [];
+  }
+}
+
+// 渲染标签列表
+async function renderTagsList() {
+  const tagsListEl = document.getElementById('tagsList');
+  if (!tagsListEl) return;
+
+  try {
+    tagsListEl.innerHTML = `
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <div>正在加载标签...</div>
+      </div>
+    `;
+
+    const tags = await getAllTagsWithCount();
+
+    if (tags.length === 0) {
+      tagsListEl.classList.add('empty');
+      tagsListEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">—</div>
+          <div class="empty-state-text">暂无标签</div>
+          <div class="empty-state-hint">请为书签添加标签后查看</div>
+        </div>
+      `;
+      return;
+    }
+
+    // 移除 empty 类（如果有标签）
+    tagsListEl.classList.remove('empty');
+
+    tagsListEl.innerHTML = tags.map(tag => `
+      <div class="tag-card" data-tag-name="${escapeHtml(tag.name)}">
+        <div class="tag-card-name">#${escapeHtml(tag.name)}</div>
+      </div>
+    `).join('');
+
+    // 为标签卡片添加点击事件（后续可以添加筛选功能）
+    const tagCards = tagsListEl.querySelectorAll('.tag-card');
+    tagCards.forEach(card => {
+      card.addEventListener('click', () => {
+        // TODO: 后续可以实现点击标签筛选书签的功能
+        console.log('点击了标签:', card.getAttribute('data-tag-name'));
+      });
+    });
+
+  } catch (error) {
+    console.error('渲染标签列表失败:', error);
+    tagsListEl.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">—</div>
+        <div class="empty-state-text">加载失败</div>
+      </div>
+    `;
+  }
 }
 
 // 页面加载时初始化
