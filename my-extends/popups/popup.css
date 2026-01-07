@@ -190,6 +190,171 @@ body {
     color: #000;
 }
 
+.action-btn-link:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.bookmark-tags-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+/* 智能标签生成区域 */
+.smart-tags-area {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.smart-tags-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    font-size: 13px;
+    color: #666;
+}
+
+.loading-spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f0f0f0;
+    border-top-color: #333;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.smart-tags-result {
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 4px;
+}
+
+.smart-tags-result-label {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.smart-tags-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.smart-tag-suggestion {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.smart-tag-text {
+    color: #333;
+}
+
+.smart-tag-add {
+    background: #333;
+    color: #fff;
+    border: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+}
+
+.smart-tag-add:hover {
+    background: #000;
+}
+
+.smart-tags-result-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-smart-tags {
+    padding: 6px 12px;
+    background: #333;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.btn-smart-tags:hover {
+    background: #000;
+}
+
+.btn-smart-tags-secondary {
+    padding: 6px 12px;
+    background: #fff;
+    color: #666;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-smart-tags-secondary:hover {
+    border-color: #333;
+    color: #333;
+}
+
+.smart-tags-error {
+    padding: 12px;
+    background: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.smart-tags-error.info {
+    background: #e3f2fd;
+    color: #1565c0;
+    border-color: #bbdefb;
+}
+
+.smart-tags-no-suggestions {
+    font-size: 12px;
+    color: #999;
+    text-align: center;
+    padding: 8px 0;
+}
+
+.action-btn-link:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.bookmark-tags-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
 /* 标签编辑对话框 */
 .tags-edit-dialog {
     position: fixed;

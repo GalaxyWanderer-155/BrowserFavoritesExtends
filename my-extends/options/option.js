@@ -166,6 +166,7 @@ function renderBookmarks() {
         <div class="bookmark-menu" id="menu-${bookmarkId}">
           <button class="bookmark-menu-item edit" data-bookmark-id="${bookmarkId}">编辑</button>
           <button class="bookmark-menu-item edit-tags" data-bookmark-id="${bookmarkId}">编辑标签</button>
+          <button class="bookmark-menu-item generate-tags" data-bookmark-id="${bookmarkId}" data-bookmark-url="${escapedUrl}" data-bookmark-title="${bookmarkTitle}">智能生成标签</button>
           <button class="bookmark-menu-item copy-link" data-url="${escapedUrl}">复制链接</button>
           <button class="bookmark-menu-item delete" data-bookmark-id="${bookmarkId}" data-bookmark-title="${bookmarkTitle}">删除</button>
         </div>
@@ -491,30 +492,46 @@ function deleteBookmark(id, title) {
 }
 
 // 显示通知
-function showNotification(message) {
+function showNotification(message, type = 'success') {
   // 创建一个简单的通知
   const notification = document.createElement('div');
+  
+  // 根据类型设置不同的背景色
+  let bgColor = '#28a745'; // 默认成功（绿色）
+  if (type === 'error') {
+    bgColor = '#dc3545'; // 错误（红色）
+  } else if (type === 'info') {
+    bgColor = '#17a2b8'; // 信息（蓝色）
+  }
+  
   notification.style.cssText = `
     position: fixed;
     top: 20px;
     right: 20px;
-    background: #28a745;
+    background: ${bgColor};
     color: white;
     padding: 15px 20px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     z-index: 10000;
     animation: slideIn 0.3s ease-out;
+    max-width: 300px;
+    word-wrap: break-word;
   `;
   notification.textContent = message;
   document.body.appendChild(notification);
 
+  // 根据类型设置自动隐藏时间
+  const hideDelay = type === 'error' ? 5000 : (type === 'info' ? 4000 : 3000);
+
   setTimeout(() => {
     notification.style.animation = 'slideOut 0.3s ease-in';
     setTimeout(() => {
-      document.body.removeChild(notification);
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
     }, 300);
-  }, 2000);
+  }, hideDelay);
 }
 
 // 添加 CSS 动画
@@ -582,6 +599,11 @@ function initSidebar() {
       const targetView = document.getElementById(targetPage);
       if (targetView) {
         targetView.classList.add('active');
+        
+        // 如果切换到API设置页面，加载配置
+        if (targetPage === 'api-settings') {
+          loadApiConfigToForm();
+        }
       }
     });
   });
@@ -619,6 +641,20 @@ function initEventDelegation() {
       const bookmarkId = e.target.getAttribute('data-bookmark-id');
       if (bookmarkId) {
         startEditTags(bookmarkId);
+      }
+      const menuId = e.target.closest('.bookmark-menu').id.replace('menu-', '');
+      closeMenu(menuId);
+      return;
+    }
+
+    // 智能生成标签按钮
+    if (e.target.classList.contains('generate-tags')) {
+      e.stopPropagation();
+      const bookmarkId = e.target.getAttribute('data-bookmark-id');
+      const bookmarkUrl = e.target.getAttribute('data-bookmark-url');
+      const bookmarkTitle = e.target.getAttribute('data-bookmark-title');
+      if (bookmarkId && bookmarkUrl) {
+        generateSmartTagsForBookmarkOption(bookmarkId, bookmarkUrl, bookmarkTitle);
       }
       const menuId = e.target.closest('.bookmark-menu').id.replace('menu-', '');
       closeMenu(menuId);
@@ -1215,5 +1251,631 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     console.warn('chrome.storage API 不可用，将使用页面可见性变化来更新');
   }
+
+  // 初始化API设置页面
+  initApiSettings();
 });
+
+// ==================== API配置相关功能 ====================
+
+/**
+ * 初始化API设置页面
+ */
+function initApiSettings() {
+  // 如果当前已经是API设置页面，直接加载配置
+  const apiSettingsPage = document.getElementById('api-settings');
+  if (apiSettingsPage && apiSettingsPage.classList.contains('active')) {
+    loadApiConfigToForm();
+  }
+
+  // 绑定表单事件
+  bindApiFormEvents();
+}
+
+/**
+ * 加载API配置到表单
+ */
+async function loadApiConfigToForm() {
+  try {
+    if (typeof ApiConfig === 'undefined') {
+      console.error('ApiConfig 未加载');
+      showApiStatus('error', 'API配置模块未加载，请刷新页面');
+      return;
+    }
+
+    const config = await ApiConfig.getApiConfig();
+    
+    // 填充表单
+    const enabledCheckbox = document.getElementById('apiEnabled');
+    const providerSelect = document.getElementById('apiProvider');
+    const endpointInput = document.getElementById('apiEndpoint');
+    const apiKeyInput = document.getElementById('apiKey');
+    const modelInput = document.getElementById('apiModel');
+    const temperatureRange = document.getElementById('apiTemperature');
+    const temperatureValue = document.getElementById('temperatureValue');
+    const maxTokensInput = document.getElementById('apiMaxTokens');
+    const timeoutInput = document.getElementById('apiTimeout');
+
+    // 先填充表单字段，使用保存的配置值
+    if (enabledCheckbox) enabledCheckbox.checked = config.enabled || false;
+    if (providerSelect) providerSelect.value = config.provider || 'openai';
+    
+    // 重要：使用已保存的配置值，不要被默认值覆盖
+    if (endpointInput) {
+      // 如果配置中有 endpoint 值，使用配置值；否则保持为空
+      endpointInput.value = config.endpoint || '';
+    }
+    if (apiKeyInput) {
+      apiKeyInput.value = config.apiKey || '';
+    }
+    if (modelInput) {
+      // 如果配置中有 model 值，使用配置值；否则保持为空
+      modelInput.value = config.model || '';
+    }
+    if (temperatureRange) {
+      temperatureRange.value = config.temperature !== undefined ? config.temperature : 0.7;
+      if (temperatureValue) {
+        temperatureValue.textContent = temperatureRange.value;
+      }
+    }
+    if (maxTokensInput) {
+      maxTokensInput.value = config.maxTokens !== undefined ? config.maxTokens : 500;
+    }
+    if (timeoutInput) {
+      timeoutInput.value = config.timeout !== undefined ? config.timeout : 30000;
+    }
+
+    // 更新提供商相关的选项（模型建议列表等），但不覆盖已填充的值
+    updateProviderOptions(config.provider || 'openai', true); // 传入第二个参数表示不覆盖已存在的值
+
+    // 更新当前配置显示
+    updateCurrentConfigDisplay(config);
+
+    console.log('API配置已加载到表单');
+  } catch (error) {
+    console.error('加载API配置失败:', error);
+    showApiStatus('error', '加载配置失败：' + error.message);
+  }
+}
+
+/**
+ * 更新当前配置显示
+ */
+function updateCurrentConfigDisplay(config) {
+  const currentConfigCard = document.getElementById('currentConfigCard');
+  const currentConfigStatus = document.getElementById('currentConfigStatus');
+  const currentConfigEnabled = document.getElementById('currentConfigEnabled');
+  const currentConfigProvider = document.getElementById('currentConfigProvider');
+  const currentConfigEndpoint = document.getElementById('currentConfigEndpoint');
+  const currentConfigModel = document.getElementById('currentConfigModel');
+  const currentConfigAdvanced = document.getElementById('currentConfigAdvanced');
+  const currentConfigAdvancedParams = document.getElementById('currentConfigAdvancedParams');
+
+  if (!currentConfigCard) return;
+
+  if (!config || !config.endpoint || !config.apiKey) {
+    // 如果配置不完整，隐藏显示
+    currentConfigCard.style.display = 'none';
+    return;
+  }
+
+  // 显示配置卡片
+  currentConfigCard.style.display = 'block';
+
+  // 获取提供商名称
+  let providerName = '未知';
+  if (typeof ApiConfig !== 'undefined' && ApiConfig.PROVIDER_CONFIGS[config.provider]) {
+    providerName = ApiConfig.PROVIDER_CONFIGS[config.provider].name;
+  } else {
+    providerName = config.provider || '自定义';
+  }
+
+  // 更新状态
+  if (config.enabled) {
+    if (currentConfigStatus) {
+      currentConfigStatus.textContent = '已启用';
+      currentConfigStatus.className = 'current-config-status enabled';
+    }
+  } else {
+    if (currentConfigStatus) {
+      currentConfigStatus.textContent = '未启用';
+      currentConfigStatus.className = 'current-config-status disabled';
+    }
+  }
+
+  // 更新配置信息
+  if (currentConfigEnabled) {
+    currentConfigEnabled.textContent = config.enabled ? '已启用' : '未启用';
+    currentConfigEnabled.className = config.enabled ? 'status-enabled' : 'status-disabled';
+  }
+
+  if (currentConfigProvider) {
+    currentConfigProvider.textContent = providerName;
+  }
+
+  if (currentConfigEndpoint) {
+    // 截断过长的端点显示
+    let endpoint = config.endpoint || '未设置';
+    if (endpoint.length > 60) {
+      endpoint = endpoint.substring(0, 30) + '...' + endpoint.substring(endpoint.length - 27);
+    }
+    currentConfigEndpoint.textContent = endpoint;
+    currentConfigEndpoint.title = config.endpoint || '';
+  }
+
+  if (currentConfigModel) {
+    currentConfigModel.textContent = config.model || '未设置';
+  }
+
+  // 高级参数显示
+  if (currentConfigAdvanced && currentConfigAdvancedParams) {
+    const advancedParams = [];
+    if (config.temperature !== undefined && config.temperature !== 0.7) {
+      advancedParams.push(`温度: ${config.temperature}`);
+    }
+    if (config.maxTokens !== undefined && config.maxTokens !== 500) {
+      advancedParams.push(`最大Token: ${config.maxTokens}`);
+    }
+    if (config.timeout !== undefined && config.timeout !== 30000) {
+      advancedParams.push(`超时: ${config.timeout}ms`);
+    }
+
+    if (advancedParams.length > 0) {
+      currentConfigAdvanced.style.display = 'flex';
+      currentConfigAdvancedParams.textContent = advancedParams.join(' | ');
+    } else {
+      currentConfigAdvanced.style.display = 'none';
+    }
+  }
+}
+
+/**
+ * 更新提供商相关的选项（模型列表等）
+ * @param {string} provider - 提供商名称
+ * @param {boolean} preserveExistingValues - 是否保留已存在的值（默认 false）
+ */
+function updateProviderOptions(provider, preserveExistingValues = false) {
+  if (typeof ApiConfig === 'undefined') return;
+
+  const providerConfig = ApiConfig.PROVIDER_CONFIGS[provider];
+  if (!providerConfig) return;
+
+  const modelInput = document.getElementById('apiModel');
+  const modelSuggestions = document.getElementById('modelSuggestions');
+  const endpointInput = document.getElementById('apiEndpoint');
+
+  // 更新端点（如果为空且不保留已存在的值）
+  if (endpointInput && !preserveExistingValues && !endpointInput.value) {
+    endpointInput.value = providerConfig.endpoint || '';
+  }
+
+  // 更新模型建议列表（总是更新，这是下拉选项）
+  if (modelSuggestions && providerConfig.models && providerConfig.models.length > 0) {
+    modelSuggestions.innerHTML = '';
+    providerConfig.models.forEach(model => {
+      const option = document.createElement('option');
+      option.value = model;
+      modelSuggestions.appendChild(option);
+    });
+  }
+
+  // 如果当前模型为空且不保留已存在的值，设置默认模型
+  if (modelInput && !preserveExistingValues && !modelInput.value && providerConfig.defaultModel) {
+    modelInput.value = providerConfig.defaultModel;
+  }
+}
+
+/**
+ * 绑定表单事件
+ */
+function bindApiFormEvents() {
+  // 提供商选择变化时更新选项
+  const providerSelect = document.getElementById('apiProvider');
+  if (providerSelect) {
+    providerSelect.addEventListener('change', (e) => {
+      const provider = e.target.value;
+      updateProviderOptions(provider);
+    });
+  }
+
+  // 温度滑块实时更新显示值
+  const temperatureRange = document.getElementById('apiTemperature');
+  const temperatureValue = document.getElementById('temperatureValue');
+  if (temperatureRange && temperatureValue) {
+    temperatureRange.addEventListener('input', (e) => {
+      temperatureValue.textContent = e.target.value;
+    });
+  }
+
+  // API Key 显示/隐藏切换
+  const toggleApiKeyBtn = document.getElementById('toggleApiKey');
+  const apiKeyInput = document.getElementById('apiKey');
+  if (toggleApiKeyBtn && apiKeyInput) {
+    toggleApiKeyBtn.addEventListener('click', () => {
+      const isPassword = apiKeyInput.type === 'password';
+      apiKeyInput.type = isPassword ? 'text' : 'password';
+      toggleApiKeyBtn.textContent = isPassword ? '🙈' : '👁';
+      toggleApiKeyBtn.title = isPassword ? '隐藏' : '显示';
+    });
+  }
+
+  // 高级设置展开/折叠
+  const toggleAdvancedBtn = document.getElementById('toggleAdvanced');
+  const advancedSettings = document.getElementById('advancedSettings');
+  if (toggleAdvancedBtn && advancedSettings) {
+    toggleAdvancedBtn.addEventListener('click', () => {
+      const isExpanded = advancedSettings.style.display !== 'none';
+      advancedSettings.style.display = isExpanded ? 'none' : 'block';
+      toggleAdvancedBtn.classList.toggle('expanded', !isExpanded);
+    });
+  }
+
+  // 保存配置按钮
+  const saveBtn = document.getElementById('saveApiConfig');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      await saveApiConfigFromForm();
+    });
+  }
+
+  // 测试连接按钮
+  const testBtn = document.getElementById('testApiConfig');
+  if (testBtn) {
+    testBtn.addEventListener('click', async () => {
+      await testApiConnection();
+    });
+  }
+
+  // 重置配置按钮
+  const resetBtn = document.getElementById('resetApiConfig');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', async () => {
+      await resetApiConfigToDefault();
+    });
+  }
+}
+
+/**
+ * 从表单获取配置数据
+ */
+function getConfigFromForm() {
+  const enabledCheckbox = document.getElementById('apiEnabled');
+  const providerSelect = document.getElementById('apiProvider');
+  const endpointInput = document.getElementById('apiEndpoint');
+  const apiKeyInput = document.getElementById('apiKey');
+  const modelInput = document.getElementById('apiModel');
+  const temperatureRange = document.getElementById('apiTemperature');
+  const maxTokensInput = document.getElementById('apiMaxTokens');
+  const timeoutInput = document.getElementById('apiTimeout');
+
+  return {
+    enabled: enabledCheckbox ? enabledCheckbox.checked : false,
+    provider: providerSelect ? providerSelect.value : 'openai',
+    endpoint: endpointInput ? endpointInput.value.trim() : '',
+    apiKey: apiKeyInput ? apiKeyInput.value.trim() : '',
+    model: modelInput ? modelInput.value.trim() : '',
+    temperature: temperatureRange ? parseFloat(temperatureRange.value) : 0.7,
+    maxTokens: maxTokensInput ? parseInt(maxTokensInput.value) : 500,
+    timeout: timeoutInput ? parseInt(timeoutInput.value) : 30000
+  };
+}
+
+/**
+ * 验证表单数据
+ */
+function validateApiForm() {
+  const config = getConfigFromForm();
+  const errors = [];
+
+  if (!config.endpoint) {
+    errors.push('API端点为必填项');
+  } else {
+    try {
+      const url = new URL(config.endpoint);
+      if (!['http:', 'https:'].includes(url.protocol)) {
+        errors.push('API端点必须是 http 或 https 协议');
+      }
+    } catch (e) {
+      errors.push('API端点格式不正确');
+    }
+  }
+
+  if (!config.apiKey) {
+    errors.push('API Key 为必填项');
+  }
+
+  if (!config.model && config.provider !== 'custom') {
+    errors.push('模型名称为必填项');
+  }
+
+  if (config.temperature < 0 || config.temperature > 2) {
+    errors.push('温度必须在 0-2 之间');
+  }
+
+  if (config.maxTokens < 1 || config.maxTokens > 4000) {
+    errors.push('最大Token数必须在 1-4000 之间');
+  }
+
+  if (config.timeout < 1000 || config.timeout > 120000) {
+    errors.push('超时时间必须在 1000-120000 毫秒之间');
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors: errors
+  };
+}
+
+/**
+ * 从表单保存API配置
+ */
+async function saveApiConfigFromForm() {
+  try {
+    if (typeof ApiConfig === 'undefined') {
+      showApiStatus('error', 'API配置模块未加载');
+      return;
+    }
+
+    // 验证表单
+    const validation = validateApiForm();
+    if (!validation.valid) {
+      showApiStatus('error', '配置验证失败：\n' + validation.errors.join('\n'));
+      return;
+    }
+
+    // 使用 ApiConfig 验证
+    const config = getConfigFromForm();
+    const apiValidation = ApiConfig.validateApiConfig(config);
+    if (!apiValidation.valid) {
+      showApiStatus('error', '配置验证失败：\n' + apiValidation.errors.join('\n'));
+      return;
+    }
+
+    // 保存配置
+    const saveResult = await ApiConfig.saveApiConfig(config, true); // 加密存储 API Key
+    if (!saveResult) {
+      throw new Error('保存配置失败');
+    }
+
+    // 验证保存是否成功 - 重新读取配置确认
+    const savedConfig = await ApiConfig.getApiConfig();
+    console.log('保存后的配置验证:', {
+      provider: savedConfig.provider,
+      endpoint: savedConfig.endpoint ? savedConfig.endpoint.substring(0, 30) + '...' : '未设置',
+      model: savedConfig.model,
+      enabled: savedConfig.enabled,
+      hasApiKey: !!savedConfig.apiKey
+    });
+
+    showApiStatus('success', '配置已保存成功！');
+
+    // 更新当前配置显示
+    updateCurrentConfigDisplay(savedConfig);
+
+    console.log('API配置已保存并验证');
+  } catch (error) {
+    console.error('保存API配置失败:', error);
+    showApiStatus('error', '保存配置失败：' + error.message);
+  }
+}
+
+/**
+ * 测试API连接
+ */
+async function testApiConnection() {
+  try {
+    if (typeof ApiConfig === 'undefined') {
+      showApiStatus('error', 'API配置模块未加载');
+      return;
+    }
+
+    // 验证表单
+    const validation = validateApiForm();
+    if (!validation.valid) {
+      showApiStatus('error', '请先填写完整的配置信息');
+      return;
+    }
+
+    const config = getConfigFromForm();
+    
+    // 禁用按钮
+    const testBtn = document.getElementById('testApiConfig');
+    const saveBtn = document.getElementById('saveApiConfig');
+    if (testBtn) testBtn.disabled = true;
+    if (saveBtn) saveBtn.disabled = true;
+
+    showApiStatus('info', '正在测试API连接...');
+
+    // 构建测试请求
+    const testPrompt = '请返回"测试成功"四个字';
+    
+    let response;
+    if (config.provider === 'openai' || config.provider === 'deepseek') {
+      // OpenAI 和 DeepSeek 使用相同的格式
+      response = await fetch(config.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'user', content: testPrompt }
+          ],
+          max_tokens: 50,
+          temperature: 0.7
+        })
+      });
+    } else if (config.provider === 'claude') {
+      response = await fetch(config.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': config.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: 50,
+          messages: [
+            { role: 'user', content: testPrompt }
+          ]
+        })
+      });
+    } else {
+      // 自定义API，使用通用格式
+      response = await fetch(config.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [
+            { role: 'user', content: testPrompt }
+          ],
+          max_tokens: 50
+        })
+      });
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API请求失败 (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    showApiStatus('success', 'API连接测试成功！\n响应已收到，配置正确。');
+
+  } catch (error) {
+    console.error('测试API连接失败:', error);
+    showApiStatus('error', 'API连接测试失败：' + error.message);
+  } finally {
+    // 恢复按钮
+    const testBtn = document.getElementById('testApiConfig');
+    const saveBtn = document.getElementById('saveApiConfig');
+    if (testBtn) testBtn.disabled = false;
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+/**
+ * 重置配置为默认值
+ */
+async function resetApiConfigToDefault() {
+  try {
+    if (typeof ApiConfig === 'undefined') {
+      showApiStatus('error', 'API配置模块未加载');
+      return;
+    }
+
+    if (!confirm('确定要重置API配置为默认值吗？')) {
+      return;
+    }
+
+    await ApiConfig.resetApiConfig();
+    await loadApiConfigToForm();
+    showApiStatus('success', '配置已重置为默认值');
+
+    console.log('API配置已重置');
+  } catch (error) {
+    console.error('重置API配置失败:', error);
+    showApiStatus('error', '重置配置失败：' + error.message);
+  }
+}
+
+/**
+ * 显示API状态提示
+ */
+function showApiStatus(type, message) {
+  const statusEl = document.getElementById('apiConfigStatus');
+  if (!statusEl) return;
+
+  statusEl.className = `api-status ${type}`;
+  statusEl.textContent = message;
+  statusEl.style.display = 'block';
+
+  // 如果是成功消息，3秒后自动隐藏
+  if (type === 'success') {
+    setTimeout(() => {
+      statusEl.style.display = 'none';
+    }, 3000);
+  }
+}
+
+// ==================== 智能标签生成功能（选项页面） ====================
+
+/**
+ * 生成智能标签（选项页面版本）
+ */
+async function generateSmartTagsForBookmarkOption(bookmarkId, bookmarkUrl, bookmarkTitle) {
+  try {
+    // 检查API配置
+    const configResult = await chrome.storage.local.get('aiApiConfig');
+    const apiConfig = configResult.aiApiConfig;
+
+    if (!apiConfig || !apiConfig.enabled) {
+      showNotification('智能标签功能未启用，请在API设置中配置', 'error');
+      return;
+    }
+
+    // 显示加载提示
+    showNotification('正在生成标签...', 'info');
+
+    // 构建书签对象
+    const bookmark = {
+      id: bookmarkId,
+      url: bookmarkUrl,
+      title: bookmarkTitle || '无标题'
+    };
+
+    // 尝试查找匹配的标签页
+    let targetTabId = null;
+    try {
+      const allTabs = await chrome.tabs.query({ url: bookmarkUrl });
+      if (allTabs.length > 0) {
+        targetTabId = allTabs[0].id;
+      } else {
+        // 如果标签页未打开，提示用户
+        const shouldContinue = confirm('该页面的标签页未打开，将使用简化方案生成标签（仅使用标题和URL）。\n\n是否继续？\n\n提示：如果页面已打开，请刷新页面后再试。');
+        if (!shouldContinue) {
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn('查找标签页失败:', error);
+    }
+
+    // 发送消息到 background 生成标签
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'GENERATE_SMART_TAGS',
+        bookmarkId: bookmarkId,
+        bookmark: bookmark,
+        tabId: targetTabId
+      });
+
+      if (response && response.success) {
+        const newTagsCount = (response.newTags || []).length;
+        if (newTagsCount > 0) {
+          showNotification(`成功生成 ${newTagsCount} 个新标签`, 'success');
+          // 重新加载书签以更新显示
+          loadBookmarks();
+        } else {
+          showNotification('未生成新的标签', 'info');
+        }
+      } else {
+        throw new Error(response?.error || '生成标签失败');
+      }
+    } catch (error) {
+      console.error('生成智能标签失败:', error);
+      showNotification(error.message || '生成标签失败，请稍后重试', 'error');
+    }
+  } catch (error) {
+    console.error('生成智能标签失败:', error);
+    showNotification('生成标签时发生错误', 'error');
+  }
+}
 
